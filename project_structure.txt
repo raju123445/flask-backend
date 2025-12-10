@@ -1,0 +1,18 @@
+|---.env
+|---.env.example
+|---.gitignore
+|---app.py
+|---config.py
+|---project_structure.txt
+|---requirements.txt
+|
+|---frontend
+|---models
+|---modules
+|   |---assessments
+|   |   |---models.py
+|   |   |---routes.py
+|   |
+|   |---auth
+|       |---models.py
+|       |---routes.py
