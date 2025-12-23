@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from config import db, bcrypt
+from extensions import db, bcrypt
 from modules.auth.models import users
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 

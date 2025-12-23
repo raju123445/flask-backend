@@ -1,4 +1,4 @@
-from config import db
+from extensions import db
 from datetime import datetime
 
 class users(db.Model):

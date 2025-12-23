@@ -1,9 +1,14 @@
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
 import os
+import time
+from sqlalchemy import not_
 
-from .models import AudioRecord, Sentence
-from config import db
+from .models import AudioRecord
+# importing sentence model fomr sentence directory
+# from ..sentences.models import Sentence
+from modules.sentences.models import Sentence
+from extensions import db
 from .services import (
     calculate_phoneme_accuracy,
     calculate_word_level_accuracy,
@@ -47,18 +52,23 @@ def upload_audio():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    # if not sentence_id:
-    #     return jsonify({"error": "Sentence ID missing"}), 400
+    if not sentence_id:
+        return jsonify({"error": "Sentence ID missing"}), 400
 
-    # sentence = Sentence.query.get(sentence_id)
+    sentence = Sentence.query.get(sentence_id)
     
-    # if not sentence:
-    #     return jsonify({"error": "Invalid sentence_id"}), 404
+    if not sentence:
+        return jsonify({"error": "Invalid sentence_id"}), 404
     if not user_id:
         return jsonify({"error": "User ID is required"}), 400
 
     if file and allowed_file(file.filename):
+        _, ext = os.path.splitext(file.filename)
+        
+        timestamp = int(time.time()) 
         filename = secure_filename(file.filename)
+        filename = f"assessment_audio_{timestamp}{ext}"
+        # filename = secure_filename(file.filename)
         upload_folder = current_app.config.get("UPLOAD_FOLDER", "uploads")
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
@@ -92,3 +102,89 @@ def upload_audio():
         }), 201
     else:
         return jsonify({"error": "Invalid file type"}), 400
+    
+    
+# Sentence recomondation algorithm route
+@assess_bp.route("/recommend/<int:user_id>", methods=["GET"])
+def recommend_sentence(user_id):
+    try:
+        # 1. Get user assessment history
+        assessments = AudioRecord.query.filter_by(user_id=user_id).all()
+
+        # 2. Cold start: First assessment
+        if not assessments:
+            sentence = Sentence.query.first()
+            if not sentence:
+                return jsonify({"message": "No sentences available"}), 404
+
+            return jsonify({
+                "sentence_id": sentence.id,
+                "text": sentence.text,
+                "difficulty": sentence.difficulty,
+                "phonemes": sentence.phonemes,
+                "reason": "First assessment"
+            }), 200
+
+        # 3. Sentences already completed
+        used_sentence_ids = {a.sentence_id for a in assessments}
+
+        # 4. Collect all weak phonemes
+        weak_phonemes = set()
+        for a in assessments:
+            if a.weak_phonemes:
+                weak_phonemes.update(a.weak_phonemes)
+
+        # 5. Candidate sentences (not repeated)
+        candidates = Sentence.query.filter(
+            not_(Sentence.id.in_(used_sentence_ids))
+        ).all()
+
+        if not candidates:
+            return jsonify({
+                "message": "All sentences completed",
+                "reason": "All sentence are done with this user(exhausted)"
+            }), 200
+
+        # 6. Score sentences by phoneme overlap
+        best_sentence = None
+        best_score = 0
+
+        for sentence in candidates:
+            if not sentence.phonemes:
+                continue
+
+            overlap = set(sentence.phonemes).intersection(weak_phonemes)
+            score = len(overlap)
+
+            if score > best_score:
+                best_score = score
+                best_sentence = sentence
+
+        # 7. If phoneme match found
+        if best_sentence:
+            return jsonify({
+                "sentence_id": best_sentence.id,
+                "text": best_sentence.text,
+                "difficulty": best_sentence.difficulty,
+                "matched_phonemes": list(
+                    set(best_sentence.phonemes).intersection(weak_phonemes)
+                ),
+                "phonmes": best_sentence.phonemes,
+                "reason": "weak_phoneme_match"
+            }), 200
+
+        # 8. Fallback: no phoneme match
+        fallback = candidates[0]
+        return jsonify({
+            "sentence_id": fallback.id,
+            "text": fallback.text,
+            "difficulty": fallback.difficulty,
+            "phonemes": fallback.phonemes,
+            "reason": "no_phoneme_match"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": "Recommendation failed",
+            "details": str(e)
+        }), 500
