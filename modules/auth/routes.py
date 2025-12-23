@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from config import db, bcrypt
+from extensions import db, bcrypt
 from modules.auth.models import users
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
@@ -9,6 +9,8 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
+    print("HEADERS:", request.headers)
+    print("BODY:", data)
     fullName = data.get('fullName')
     email = data.get('email')
     password = data.get('password')
@@ -65,6 +67,7 @@ def login():
     if bcrypt.check_password_hash(user.password, password):
         token=create_access_token(identity={"id":user.id,"email":user.email})
         return jsonify({
+            "id" : user.id,
             "message": "User loggedin successful!", 
             "token": token,
             "fullNmae" : user.fullName,
