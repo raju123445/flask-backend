@@ -22,8 +22,20 @@ def create_app():
     from flask_cors import CORS
 
     # allow only the Vite origin and cookies
-    CORS(app, resources={r"/auth/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
-    # CORS(app)
+    FRONTEND_ORIGINS = "http://localhost:5173"
+
+    CORS(
+        app,
+        resources={
+            r"/auth/*": {"origins": FRONTEND_ORIGINS},
+            r"/assessment/*": {"origins": FRONTEND_ORIGINS},
+            r"/assessement/*": {"origins": FRONTEND_ORIGINS},  # include the spelling your frontend uses
+        },
+        supports_credentials=True,
+        expose_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "OPTIONS"]
+    )  # CORS(app)
 
     # Blueprints
     app.register_blueprint(auth_bp, url_prefix="/auth")

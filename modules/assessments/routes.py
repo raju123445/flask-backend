@@ -28,6 +28,7 @@ assess_bp = Blueprint("assessment", __name__)
 ALLOWED_EXTENSIONS = {"wav", "mp3", "m4a"}
 
 def allowed_file(filename):
+    print("Checking file:", filename)
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @assess_bp.route("/add-sentence", methods=["POST"])
@@ -48,11 +49,14 @@ def add_sentence():
 
 @assess_bp.route("/upload", methods=["POST"])
 def upload_audio():
+    print("UPLOAD ENDPOINT HIT")
+
     if "audio" not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
 
     file = request.files["audio"]
     user_id = request.form.get("user_id")
+    print(user_id)
     sentence_id = request.form.get("sentence_id")
     # print(file, "  ", user_id, "  ", sentence_id)
 
@@ -241,7 +245,7 @@ def recommend_sentence():
         timeout=15
     )
 
-    response.raise_for_status()
+    # response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
     # print("Generated content:", content)
 
