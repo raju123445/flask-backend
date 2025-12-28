@@ -19,7 +19,7 @@ def create_app():
     jwt.init_app(app)
     bcrypt.init_app(app)
     migrate.init_app(app, db)
-    from flask_cors import CORS
+    # from flask_cors import CORS
 
     # allow only the Vite origin and cookies
     FRONTEND_ORIGINS = "http://localhost:5173"
