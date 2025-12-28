@@ -29,6 +29,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+# OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv("POSTGRESQL_URI")
