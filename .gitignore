@@ -16,6 +16,7 @@ instance/
 *.sqlite3
 uploads/
 migrations/
+NLP/
 
 # Environment variables
 .env
