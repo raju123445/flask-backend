@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
 import os
 import time
+import numpy as np
 
 from extensions import db
 from modules.sentences.models import Sentence
@@ -10,6 +11,24 @@ from modules.assessments.services import (
     calculate_word_level_accuracy,
     calculate_fluency
 )
+
+def convert_to_native_types(obj):
+    """
+    Recursively convert numpy types to native Python types for JSON serialization.
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_to_native_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_native_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_to_native_types(item) for item in obj)
+    return obj
 
 routes_bp = Blueprint('practice', __name__)
 # practice sentence recommendation for the chosen weak phonemes
@@ -99,6 +118,11 @@ def submit_practice_audio():
         word_accuracy = calculate_word_level_accuracy(file_path)
         fluency_score = calculate_fluency(file_path)
 
+        # Convert all numpy types to native Python types
+        phoneme_accuracy = convert_to_native_types(phoneme_accuracy)
+        word_accuracy = convert_to_native_types(word_accuracy)
+        fluency_score = convert_to_native_types(fluency_score)
+
         # Return results; do not persist by default (keeps practice separate)
         matched_phonemes = []
         try:
@@ -106,6 +130,7 @@ def submit_practice_audio():
             # Some services might provide weak phonemes; call weak_phonemes if available
             from modules.assessments.services import weak_phonemes as get_weak
             computed_weak = get_weak(file_path)
+            computed_weak = convert_to_native_types(computed_weak)
         except Exception:
             computed_weak = []
 

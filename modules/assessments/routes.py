@@ -6,6 +6,7 @@ from sqlalchemy import not_
 import requests
 import json
 import re
+import numpy as np
 # from config import OPENROUTER_API_KEY
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,6 +31,24 @@ ALLOWED_EXTENSIONS = {"wav", "mp3", "m4a"}
 def allowed_file(filename):
     print("Checking file:", filename)
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def convert_to_native_types(obj):
+    """
+    Recursively convert numpy types to native Python types for JSON serialization.
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_to_native_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_native_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_to_native_types(item) for item in obj)
+    return obj
 
 @assess_bp.route("/add-sentence", methods=["POST"])
 def add_sentence():
@@ -90,6 +109,12 @@ def upload_audio():
         word_data = calculate_word_level_accuracy(file_path)
         fluency_score = calculate_fluency(file_path)
         weak_phonemes_list = weak_phonemes(file_path)
+
+        # Convert all numpy types to native Python types
+        phoneme_data = convert_to_native_types(phoneme_data)
+        word_data = convert_to_native_types(word_data)
+        fluency_score = convert_to_native_types(fluency_score)
+        weak_phonemes_list = convert_to_native_types(weak_phonemes_list)
 
         # Helper: derive numeric average from model outputs
         def _avg_score_from_list(data):

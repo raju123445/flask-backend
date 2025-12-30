@@ -11,9 +11,10 @@ from scipy.spatial.distance import cosine
 from pathlib import Path
 
 # --- FIX 1: Correct Path Logic ---
-# Use project root to locate models and scripts reliably
-ROOT = Path(__file__).resolve().parent.parent
+# Use package (Backend) directory as root to locate models and scripts reliably
+ROOT = Path(__file__).resolve().parent
 EMB_DIR = ROOT / "models" / "embeddings"
+# Ensure scripts inside Backend are importable
 sys.path.append(str(ROOT / "scripts"))
 
 def embdir():
@@ -226,7 +227,7 @@ class SpeechTherapyModel:
                     logging.warning("NLTK resource missing when processing word '%s': %s. Attempting automatic download.", text, e)
                     try:
                         import nltk
-                        nltk.download('averaged_perceptron_tagger', quiet=True)
+                        nltk.download('averaged_perceptron_tagger_eng', quiet=True)
                         nltk.download('punkt', quiet=True)
                     except Exception as nd_e:
                         logging.exception("Failed to download NLTK resources: %s", nd_e)
