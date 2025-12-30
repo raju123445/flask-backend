@@ -168,7 +168,7 @@ class SpeechTherapyModel:
             import traceback
             print("[Model] FFmpeg/ffprobe not found on PATH. Please install FFmpeg and ensure ffmpeg and ffprobe are accessible.\nSee https://ffmpeg.org/download.html")
             print(traceback.format_exc())
-            # Create an empty transcript object with segments=[] so processing continues safely
+            # Create an empty transcript object with segments=[] so the processing continues safely
             transcript = type("T", (), {})()
             transcript.segments = []
         except Exception:
