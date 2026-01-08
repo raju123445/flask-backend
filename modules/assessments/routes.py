@@ -14,6 +14,7 @@ from .models import AudioRecord
 # importing sentence model fomr sentence directory
 # from ..sentences.models import Sentence
 from modules.sentences.models import Sentence
+from modules.assessments.models import AudioRecord
 from extensions import db
 from .services import (
     calculate_phoneme_accuracy,
@@ -144,6 +145,7 @@ def upload_audio():
         # Convert detailed outputs to DB-friendly numeric values
         phoneme_accuracy = _avg_score_from_list(phoneme_data)
         word_accuracy = _avg_score_from_list(word_data)
+        weak_words = [item['word'] for item in word_data if isinstance(item, dict) and item.get('score', 100) < 70]
 
         # Prepare a warning if nothing useful returned
         warning = None
@@ -160,7 +162,8 @@ def upload_audio():
             phoneme_accuracy=phoneme_accuracy,
             word_accuracy=word_accuracy,
             fluency_score=fluency_score,
-            weak_phonemes=weak_phonemes_list
+            weak_phonemes=weak_phonemes_list,
+            weak_words=weak_words
         )
 
         # Keep raw details available in the response for debugging
@@ -179,6 +182,7 @@ def upload_audio():
                 "word_accuracy": word_accuracy,
                 "fluency_score": fluency_score,
                 "weak_phonemes": weak_phonemes_list,
+                "weak_words": weak_words,
                 "details": details
             }
         }), 201
@@ -189,6 +193,28 @@ def upload_audio():
 # Sentence recomondation algorithm route
 @assess_bp.route("/recommend", methods=["GET"])
 def recommend_sentence():
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+    
+    # we have to recomond the audio to the user without repetation
+    sentences = Sentence.query.all()
+    used_sentence_ids = {a.sentence_id for a in AudioRecord.query.filter_by(user_id=user_id).all()}
+    candidates = [s for s in sentences if s.id not in used_sentence_ids]
+    if not candidates:
+        return jsonify({"message": "All sentences completed"}), 200
+    
+    # sort candidates by difficulty
+    candidates.sort(key=lambda s: s.difficulty)
+    
+    # return the first candidate
+    return jsonify({
+        "sentence_id": candidates[0].id,
+        "text": candidates[0].text,
+        "difficulty": candidates[0].difficulty
+    }), 200  
+    
+
     # try:
     #     # 1. Get user assessment history
     #     assessments = AudioRecord.query.filter_by(user_id=user_id).all()
@@ -283,106 +309,110 @@ def recommend_sentence():
     #         f"- {s}" for s in recent_sentences[-3:]  # keep minimal
     #     )
 
-    prompt = f"""
-    Generate ONE random English practice sentence (8–12 words) for speech practice.
-    Avoid repeating similar sentences.
-    Return ONLY valid JSON in this exact format:
-    {{"text":"","difficulty":"","phonemes":[]}}
 
-    Use ARPAbet phonemes.
-    Difficulty must be easy, medium, or hard.
-    """.strip()
+
+
+
+    # prompt = f"""
+    # Generate ONE random English practice sentence (8–12 words) for speech practice.
+    # Avoid repeating similar sentences.
+    # Return ONLY valid JSON in this exact format:
+    # {{"text":"","difficulty":"","phonemes":[]}}
+
+    # Use ARPAbet phonemes.
+    # Difficulty must be easy, medium, or hard.
+    # """.strip()
     
-    # commented
-    ''' {avoid_block}
-    """.strip()'''
+    # # commented
+    # ''' {avoid_block}
+    # """.strip()'''
 
-    payload = {
-        "model": "mistralai/mistral-small-3.1-24b-instruct:free",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.9,          # randomness
-        "max_tokens": 200
-    }
+    # payload = {
+    #     "model": "mistralai/mistral-small-3.1-24b-instruct:free",
+    #     "messages": [{"role": "user", "content": prompt}],
+    #     "temperature": 0.9,          # randomness
+    #     "max_tokens": 200
+    # }
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    # headers = {
+    #     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+    #     "Content-Type": "application/json"
+    # }
 
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        json=payload,
-        headers=headers,
-        timeout=15
-    )
+    # response = requests.post(
+    #     "https://openrouter.ai/api/v1/chat/completions",
+    #     json=payload,
+    #     headers=headers,
+    #     timeout=15
+    # )
 
-    # response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    # print("Generated content:", content)
+    # # response.raise_for_status()
+    # content = response.json()["choices"][0]["message"]["content"]
+    # # print("Generated content:", content)
 
-    # Attempt to extract a JSON object from the model output robustly
-    def _extract_json_from_text(text):
-        # Find candidate JSON object(s) using braces - try the largest first
-        matches = re.findall(r'\{.*?\}', text, re.DOTALL)
-        for m in sorted(matches, key=len, reverse=True):
-            try:
-                return json.loads(m)
-            except json.JSONDecodeError:
-                # try a relaxed fallback by replacing single quotes
-                try:
-                    return json.loads(m.replace("'", '"'))
-                except Exception:
-                    continue
-        # Fallback: slice from first '{' to last '}' and try again
-        if '{' in text and '}' in text:
-            s = text[text.find('{'): text.rfind('}')+1]
-            try:
-                return json.loads(s)
-            except Exception:
-                import ast
-                try:
-                    return ast.literal_eval(s)
-                except Exception:
-                    return None
-        return None
+    # # Attempt to extract a JSON object from the model output robustly
+    # def _extract_json_from_text(text):
+    #     # Find candidate JSON object(s) using braces - try the largest first
+    #     matches = re.findall(r'\{.*?\}', text, re.DOTALL)
+    #     for m in sorted(matches, key=len, reverse=True):
+    #         try:
+    #             return json.loads(m)
+    #         except json.JSONDecodeError:
+    #             # try a relaxed fallback by replacing single quotes
+    #             try:
+    #                 return json.loads(m.replace("'", '"'))
+    #             except Exception:
+    #                 continue
+    #     # Fallback: slice from first '{' to last '}' and try again
+    #     if '{' in text and '}' in text:
+    #         s = text[text.find('{'): text.rfind('}')+1]
+    #         try:
+    #             return json.loads(s)
+    #         except Exception:
+    #             import ast
+    #             try:
+    #                 return ast.literal_eval(s)
+    #             except Exception:
+    #                 return None
+    #     return None
 
-    parsed = _extract_json_from_text(content)
-    if parsed is None:
-        return jsonify({"error": "Failed to parse model response", "raw": content}), 502
+    # parsed = _extract_json_from_text(content)
+    # if parsed is None:
+    #     return jsonify({"error": "Failed to parse model response", "raw": content}), 502
 
-    # Normalize keys and types
-    if isinstance(parsed, dict):
-        # Accept 'phon' as alias for 'phonemes'
-        if 'phon' in parsed and 'phonemes' not in parsed:
-            parsed['phonemes'] = parsed.pop('phon')
+    # # Normalize keys and types
+    # if isinstance(parsed, dict):
+    #     # Accept 'phon' as alias for 'phonemes'
+    #     if 'phon' in parsed and 'phonemes' not in parsed:
+    #         parsed['phonemes'] = parsed.pop('phon')
 
-        # Ensure phonemes is a list of strings
-        if 'phonemes' in parsed:
-            if isinstance(parsed['phonemes'], str):
-                parsed['phonemes'] = [p.strip(' "[],.') for p in re.split(r'[,\s]+', parsed['phonemes']) if p.strip()]
-            elif isinstance(parsed['phonemes'], (list, tuple)):
-                parsed['phonemes'] = [str(p) for p in parsed['phonemes']]
+    #     # Ensure phonemes is a list of strings
+    #     if 'phonemes' in parsed:
+    #         if isinstance(parsed['phonemes'], str):
+    #             parsed['phonemes'] = [p.strip(' "[],.') for p in re.split(r'[,\s]+', parsed['phonemes']) if p.strip()]
+    #         elif isinstance(parsed['phonemes'], (list, tuple)):
+    #             parsed['phonemes'] = [str(p) for p in parsed['phonemes']]
 
-        # Normalize difficulty
-        diff = parsed.get('difficulty', '')
-        if not isinstance(diff, str) or diff.lower() not in ('easy', 'medium', 'hard'):
-            parsed['difficulty'] = 'medium'
-        else:
-            parsed['difficulty'] = diff.lower()
+    #     # Normalize difficulty
+    #     diff = parsed.get('difficulty', '')
+    #     if not isinstance(diff, str) or diff.lower() not in ('easy', 'medium', 'hard'):
+    #         parsed['difficulty'] = 'medium'
+    #     else:
+    #         parsed['difficulty'] = diff.lower()
 
-        # Validate text
-        text_val = parsed.get('text', '')
-        if not isinstance(text_val, str) or not text_val.strip():
-            return jsonify({"error": "Model output missing or invalid 'text' field", "raw": content}), 502
+    #     # Validate text
+    #     text_val = parsed.get('text', '')
+    #     if not isinstance(text_val, str) or not text_val.strip():
+    #         return jsonify({"error": "Model output missing or invalid 'text' field", "raw": content}), 502
 
-        return jsonify({
-            "sentence_id": None,
-            "text": text_val.strip(),
-            "difficulty": parsed['difficulty'],
-            "phonemes": parsed.get('phonemes', []),
-            "reason": "model_generated"
-        }), 200
+    #     return jsonify({
+    #         "sentence_id": None,
+    #         "text": text_val.strip(),
+    #         "difficulty": parsed['difficulty'],
+    #         "phonemes": parsed.get('phonemes', []),
+    #         "reason": "model_generated"
+    #     }), 200
 
-    # If model returned non-object JSON (e.g., an array), return an error
-    return jsonify({"error": "Model returned non-object JSON", "raw": content}), 502
+    # # If model returned non-object JSON (e.g., an array), return an error
+    # return jsonify({"error": "Model returned non-object JSON", "raw": content}), 502
 

@@ -8,7 +8,7 @@ from modules.auth.routes import auth_bp
 from modules.assessments.routes import assess_bp
 from modules.sentences.routes import sentences_bp
 from modules.practice.routes import routes_bp
-
+from modules.history.routes import history_bp
 
 def create_app():
     app = Flask(__name__)
@@ -42,6 +42,7 @@ def create_app():
     app.register_blueprint(assess_bp, url_prefix="/assessment")
     app.register_blueprint(sentences_bp, url_prefix="/sentences")
     app.register_blueprint(routes_bp, url_prefix="/practice")
+    app.register_blueprint(history_bp, url_prefix="/history")
 
     @app.route("/")
     def home():

@@ -5,6 +5,28 @@ from .models import Sentence
 sentences_bp = Blueprint("sentences", __name__)
 
 
+@sentences_bp.route("/list", methods=["GET"])
+def list_sentences():
+    """List all sentences in the database"""
+    try:
+        sentences = Sentence.query.all()
+        return jsonify({
+            "count": len(sentences),
+            "sentences": [{
+                "id": s.id,
+                "text": s.text,
+                "difficulty": s.difficulty,
+                "source_type": s.source_type,
+                "phonemes": s.phonemes
+            } for s in sentences]
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "message": "Failed to list sentences",
+            "error": str(e)
+        }), 500
+
+
 @sentences_bp.route("/add-sentence", methods=["POST"])
 def add_sentence():
     data = request.get_json()
@@ -34,8 +56,8 @@ def add_sentence():
             "message": "Failed to add sentence",
             "error": str(e)
         }), 500
-        
-        
+
+
 @sentences_bp.route("/add-bulk-sentences", methods=["POST"])
 def add_bulk_sentences():
     data = request.get_json()
